@@ -7,6 +7,58 @@
 using namespace std;
 
 int coun = 0;
+void DrawTable(int n) {
+    ofstream out("ans.txt", ios_base::app);
+    string t;
+    int flag = 1;
+    ifstream in("tmptable.txt");
+    in >> t;
+    out << t << endl << "|";
+
+    for (int i = 0; i < n; i++) {
+        in >> t;
+        out << setprecision(10) << setw(25) << t << "|";
+    }
+    out << "\n" << "+";
+    for (int i = 0; i < n; i++)
+        out << "-------------------------+";
+    out << "\n";
+    while (flag) {
+        for (int i = 0; i < n; i++) {
+            in >> t;
+            if (t == "/0") {
+                flag = 0; break;
+            }
+
+            out << "|" << setprecision(10) << setw(25) << t;
+        }
+        if (flag)out << "|\n";
+        else out << "\n";
+    }
+    flag = 1;
+    while (flag) {
+        in >> t;
+        if (t == "/0") {
+            flag = 0; break;
+        }
+        out << setprecision(3) << t << " ";
+    }
+    out << "\n\n";
+    flag = 1;
+    while (flag) {
+        in >> t;
+        if (t == "/0") {
+            flag = 0; break;
+        }
+        out << setprecision(4) << t << " ";
+    }
+    out << "\n\n";
+
+    in.close();
+    out.close();
+    ofstream out2("tmptable.txt");
+    out2.close();
+}
 
 double Func(complex<double> x, int number_roots = 0, complex<double> first_root = complex<double>(0, 0), complex<double> second_root = complex<double>(0, 0)) {
     coun++;
@@ -78,44 +130,56 @@ complex<double>Grad(complex<double> x, int number_roots = 0, complex<double> fir
     return gr;
 }
 
-void surf_border(complex<double> z) {
-    double eps = 0.;
+void conditional_gradient(complex<double> z) {
+    ofstream out("tmptable.txt", ios_base::app);
+   
     const double EPS = 1e-5;
-    const double L = 0.5;
+    //const double L = 0.5;
     const double APPROACH_STEP = 1.;
-    int k = 1;
+    int i = 1;
 
-    complex<double> fg = Grad(z);
+    complex<double> grad = Grad(z);
+    out << "Conditional_gradient_part1" << "\n" << " " << "i" << " " << "(x,y)" << " " << "Grad(x,y)" << " " << "G(x,y)" << endl;
     //быстро и грубо шагами длиной APPROACH_STEP подходим к границе
     while (abs(g(z)) > EPS) {
-        fg /= abs(fg);
+        grad /= abs(grad);
         //если шаг выбивает нас за границу допустимой области,
         //линейно аппроксимируем g(x, y) и делаем шаг с такой длиной,
         //чтобы попасть ровненько на границу (g(x,y) = 0)
         //подробнее - в методичке
-        if (g(z - APPROACH_STEP * fg) > EPS) {
-            z -= g(z) / (g_grad(z).real()* fg.real()+ g_grad(z).imag() * fg.imag()) * fg;
+        if (g(z - APPROACH_STEP * grad) > EPS) {
+            z -= g(z) / (g_grad(z).real()* grad.real()+ g_grad(z).imag() * grad.imag()) * grad;
         }
         else {
-            z -= APPROACH_STEP * fg;
+            z -= APPROACH_STEP * grad;
         }
-        fg = Grad(z);
-        printf("%d; %d; (%f, %f);  %f; (%f, %f); -; -; -; -\n",
+        grad = Grad(z);
+        out  << i++ << " " << z << " " << grad << " " << g(z) << endl;
+       
+        /*printf("%d; %d; (%f, %f);  %f; (%f, %f); -; -; -; -\n",
             k, coun, z.real(), z.imag(),  g(z),
-            fg.real(), fg.imag());
-        ++k;
-    }
+            grad.real(), grad.imag());
+        ++k;*/
+    } 
+    out << " /0 "<<"Started point on G: "<<z<<" /0 ";
+    out << "Func was called " << coun << " times /0 \n";
+    coun = 0;
+    out.close();
+    DrawTable(4);
     
     complex<double> gg = g_grad(z), prev_tan = 0.;
-    double cos = (-fg.real()*gg.real() + (-fg).imag() * gg.imag())/(abs(-fg)*abs(gg));
+    double cos = (-grad.real()*gg.real() + (-grad).imag() * gg.imag())/(abs(-grad)*abs(gg));
     const double TARGET_COS = 0.9994;
     double alpha = 0.1;
     //начинаем скользить по границе допустимой области
     //останавливаемся, когда косинус между антиградиентом f и градиентом g
     //станет больше либо равен TARGET_COS (т.е. меньше двух градусов)
-    do {
+    ofstream out2("tmptable.txt", ios_base::app);
+    out2 << "Conditional_gradient_part2" << "\n" << " " << "i" << " " << "(x,y)" << " " << "Grad(x,y)" << " " << "G(x,y)" << " " << "Grad(G(x,y))" << " " << "Tangent" << " " << "cos" << endl;
+    while (cos < TARGET_COS) {
+        
         //Проекция антиградиента на касательную плоскость
-        complex<double> tan = -fg - gg * (-fg.real()* gg.real() + -fg.imag() * gg.imag()) / (abs(gg)* abs(gg));
+        complex<double> tan = -grad - gg * (-grad.real()* gg.real() + -grad.imag() * gg.imag()) / (abs(gg)* abs(gg));
         //если проекция антиградиента резко изменила направление
         //т.е. угол между прыдудущей проекцией и текущей тупой,
         //то это означает, что мы сделали слишком большой шаг и проскочили минимум
@@ -131,22 +195,36 @@ void surf_border(complex<double> z) {
         //возвращаемся по направлению антиградиента с такой длиной, 
         //что линейная аппроксимация g в новой точке равна 0
         if (g(z) > EPS)
-            z -= g(z) / (abs(gg)* abs(gg)* abs(gg) * abs(gg)) * gg;
+            z -= g(z) / (abs(gg)* abs(gg)+ abs(gg) * abs(gg)) * gg;
 
-        fg = Grad(z);
+        grad = Grad(z);
         gg = g_grad(z);
-        cos = (-fg.real()*gg.real() + (-fg).imag() * gg.imag())/(abs(-fg)*abs(gg));
-        ++k;
+        cos = (-grad.real()*gg.real() + (-grad).imag() * gg.imag())/(abs(-grad)*abs(gg));
+        //++i; 
+        out2  << i++ << " " << z << " " << grad << " " << g(z) << " " << gg << " " << tan << " " << cos << endl;
+        //printf("%d; %d; (%f, %f);  %f; (%f, %f); (%f, %f); (%f, %f); %f; %f\n",
+        //    i, coun, z.real(), z.imag(), g(z),
+        //    grad.real(), grad.imag(), gg.real(), gg.imag(), tan.real(), tan.imag(), cos,
+        //    acos(cos) * 180 / 3.1415);
+            
+    }
+    out2 << " /0 " << "conditional minimum: " << z << " /0 ";
+    out2 << "Func was called " << coun << " times /0 \n";
+    coun = 0;
+    out2.close();
+    DrawTable(7);
 
-        printf("%d; %d; (%f, %f);  %f; (%f, %f); (%f, %f); (%f, %f); %f; %f\n",
-            k, coun, z.real(), z.imag(), g(z),
-            fg.real(), fg.imag(), gg.real(), gg.imag(), tan.real(), tan.imag(), cos,
-            acos(cos) * 180 / 3.1415);
-    } while (cos < TARGET_COS);
 }
 
+void clear_out(string file) {
+    ofstream out(file);
+    out.close();
 
+    return;
+}
 int main() {
-    surf_border(complex<double>(0., 0.));
+    clear_out("ans.txt");
+    clear_out("tmptable.txt");
+    conditional_gradient(complex<double>(0., 0.));
     return 0;
 }
